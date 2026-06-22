@@ -19,27 +19,41 @@
     .section h2 { font-size: 16px; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #eee; }
     .field { margin-bottom: 16px; }
     .field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; }
-    .field .hint { font-size: 12px; color: #999; margin-top: 2px; }
-    .field input[type="text"], .field select {
+    .field .hint { font-size: 12px; color: #999; margin-top: 4px; line-height: 1.5; }
+    .field input[type="text"] {
       width: 100%;
       padding: 8px 12px;
       border: 1px solid #ddd;
       border-radius: 6px;
       font-size: 13px;
+      font-family: monospace;
     }
-    .field input:focus, .field select:focus { outline: none; border-color: #333; }
-    .radio-group { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
-    .radio-group label { display: flex; align-items: center; gap: 8px; font-weight: 400; cursor: pointer; }
+    .field input:focus { outline: none; border-color: #333; }
+    .radio-group { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+    .radio-option { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; }
+    .radio-option input[type="radio"] { margin-top: 3px; }
+    .radio-option-text { flex: 1; }
+    .radio-option-label { font-size: 13px; font-weight: 500; }
+    .radio-option-desc { font-size: 12px; color: #999; margin-top: 2px; }
+    .path-input { margin-top: 12px; margin-left: 22px; }
     .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; }
     .btn-primary { background: #1a1a1a; color: #fff; }
     .btn-primary:hover { opacity: 0.85; }
-    .status { margin-top: 12px; font-size: 13px; padding: 8px 12px; border-radius: 6px; display: none; }
-    .status.success { display: block; background: #f0fdf4; color: #15803d; }
-    .status.error { display: block; background: #fef2f2; color: #dc2626; }
+    .status-msg { margin-top: 12px; font-size: 13px; padding: 8px 12px; border-radius: 6px; display: none; }
+    .status-msg.success { display: block; background: #f0fdf4; color: #15803d; }
+    .status-msg.error { display: block; background: #fef2f2; color: #dc2626; }
     .host-status { display: flex; align-items: center; gap: 8px; padding: 12px; background: #fafafa; border-radius: 6px; }
     .host-dot { width: 8px; height: 8px; border-radius: 50%; }
     .host-dot.ok { background: #34c759; }
     .host-dot.fail { background: #ff3b30; }
+    .host-dot.checking { background: #999; }
+    .platform-card {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px;
+    }
+    .platform-name { font-weight: 500; }
+    .platform-auth { font-size: 12px; color: #999; margin-left: 8px; }
+    .platform-status { font-size: 12px; color: #34c759; }
   </style>
 </head>
 <body>
@@ -49,7 +63,7 @@
   <div class="section">
     <h2>连接状态</h2>
     <div class="host-status">
-      <span class="host-dot" id="hostDot"></span>
+      <span class="host-dot checking" id="hostDot"></span>
       <span id="hostStatus">检查中…</span>
     </div>
   </div>
@@ -59,85 +73,67 @@
     <div class="field">
       <label>监听目录类型</label>
       <div class="radio-group">
-        <label><input type="radio" name="dirType" value="default" checked> 默认目录（~/.draftpush/outbox/）</label>
-        <label><input type="radio" name="dirType" value="obsidian"> Obsidian Vault</label>
-        <label><input type="radio" name="dirType" value="custom"> 自定义目录</label>
+
+        <label class="radio-option">
+          <input type="radio" name="dirType" value="default">
+          <div class="radio-option-text">
+            <div class="radio-option-label">默认目录</div>
+            <div class="radio-option-desc">~/.draftpush/outbox/，开箱即用，无需配置</div>
+          </div>
+        </label>
+
+        <label class="radio-option">
+          <input type="radio" name="dirType" value="obsidian">
+          <div class="radio-option-text">
+            <div class="radio-option-label">Obsidian Vault</div>
+            <div class="radio-option-desc">输入 Vault 中用于存放内容的具体目录路径</div>
+          </div>
+        </label>
+        <div class="path-input" id="obsidianDirField" style="display:none;">
+          <div class="field">
+            <input type="text" id="obsidianDir" placeholder="/Users/你的用户名/Obsidian/我的笔记库/12-小红书">
+            <div class="hint">
+              填写你 Obsidian Vault 中存放待同步内容的目录。<br>
+              插件会在该目录下自动创建 <code>待同步/</code> 和 <code>已同步/</code> 子目录。<br>
+              示例：<code>/Users/souljian/Obsidian/MyVault/12-小红书</code>
+            </div>
+          </div>
+        </div>
+
+        <label class="radio-option">
+          <input type="radio" name="dirType" value="custom">
+          <div class="radio-option-text">
+            <div class="radio-option-label">自定义目录</div>
+            <div class="radio-option-desc">指定任意本地文件夹作为内容来源</div>
+          </div>
+        </label>
+        <div class="path-input" id="customDirField" style="display:none;">
+          <div class="field">
+            <input type="text" id="customDir" placeholder="/Users/你的用户名/Documents/my-content">
+            <div class="hint">
+              填写完整的本地路径。<br>
+              插件会在该目录下自动创建 <code>待同步/</code> 和 <code>已同步/</code> 子目录。
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
-    <div class="field" id="customDirField" style="display:none;">
-      <label>目录路径</label>
-      <input type="text" id="customDir" placeholder="/Users/you/your-vault/12-小红书">
-      <div class="hint">输入完整的本地路径，插件会在该目录下创建 待同步/ 和 已同步/ 子目录</div>
-    </div>
     <button class="btn btn-primary" id="saveBtn">保存设置</button>
-    <div class="status" id="saveStatus"></div>
+    <div class="status-msg" id="saveStatus"></div>
   </div>
 
   <div class="section">
     <h2>已启用平台</h2>
-    <div id="platformList"></div>
+    <div class="platform-card">
+      <div>
+        <span class="platform-name">小红书</span>
+        <span class="platform-auth">浏览器登录</span>
+      </div>
+      <span class="platform-status">已启用</span>
+    </div>
   </div>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', async () => {
-      // 检查 host 连接
-      const resp = await chrome.runtime.sendMessage({ type: 'check_host' });
-      const dot = document.getElementById('hostDot');
-      const statusText = document.getElementById('hostStatus');
-      if (resp.connected) {
-        dot.className = 'host-dot ok';
-        statusText.textContent = 'Native Host 已连接';
-      } else {
-        dot.className = 'host-dot fail';
-        statusText.textContent = 'Native Host 未连接 — 请运行安装脚本';
-      }
-
-      // 加载已保存的设置
-      const saved = await chrome.storage.local.get(['dirType', 'customDir']);
-      if (saved.dirType) {
-        document.querySelector(`input[value="${saved.dirType}"]`).checked = true;
-        if (saved.dirType !== 'default') {
-          document.getElementById('customDirField').style.display = 'block';
-          document.getElementById('customDir').value = saved.customDir || '';
-        }
-      }
-
-      // 目录类型切换
-      document.querySelectorAll('input[name="dirType"]').forEach((radio) => {
-        radio.addEventListener('change', (e) => {
-          const show = e.target.value !== 'default';
-          document.getElementById('customDirField').style.display = show ? 'block' : 'none';
-        });
-      });
-
-      // 保存
-      document.getElementById('saveBtn').addEventListener('click', async () => {
-        const dirType = document.querySelector('input[name="dirType"]:checked').value;
-        const customDir = document.getElementById('customDir').value;
-
-        await chrome.storage.local.set({ dirType, customDir });
-
-        const status = document.getElementById('saveStatus');
-        status.className = 'status success';
-        status.textContent = '设置已保存';
-        setTimeout(() => { status.style.display = 'none'; }, 2000);
-      });
-
-      // 平台列表
-      const platforms = [
-        { id: 'xiaohongshu', name: '小红书', status: '已启用', auth: '浏览器登录' },
-      ];
-      const listEl = document.getElementById('platformList');
-      listEl.innerHTML = platforms.map((p) => `
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px;border:1px solid #eee;border-radius:6px;margin-bottom:8px;">
-          <div>
-            <strong>${p.name}</strong>
-            <span style="font-size:12px;color:#999;margin-left:8px;">${p.auth}</span>
-          </div>
-          <span style="font-size:12px;color:#34c759;">${p.status}</span>
-        </div>
-      `).join('');
-    });
-  </script>
+  <script src="options.js"></script>
 </body>
 </html>

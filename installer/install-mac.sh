@@ -4,6 +4,9 @@ set -e
 HOST_NAME="com.draftpush.host"
 HOST_DIR="/usr/local/lib/draftpush"
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
 echo "============================================"
 echo "  草稿推送 DraftPush - 安装 Native Host"
 echo "============================================"
@@ -22,7 +25,7 @@ echo "✓ Node.js: $NODE_PATH"
 # 复制 host 文件
 echo "→ 安装 host 到 $HOST_DIR ..."
 sudo mkdir -p "$HOST_DIR"
-sudo cp native-host/host.js "$HOST_DIR/host.js"
+sudo cp "$PROJECT_DIR/native-host/host.js" "$HOST_DIR/host.js"
 sudo chmod +x "$HOST_DIR/host.js"
 
 # 创建启动脚本
