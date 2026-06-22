@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="popup.css">
+  <title>草稿推送</title>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <h1 class="header-title">草稿推送</h1>
+      <button class="btn-icon" id="refreshBtn" title="刷新">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+      </button>
+    </header>
+
+    <div class="status-bar" id="statusBar">
+      <span class="status-dot" id="statusDot"></span>
+      <span class="status-text" id="statusText">检查连接中…</span>
+    </div>
+
+    <div class="content-list" id="contentList">
+      <div class="empty-state" id="emptyState">
+        <p>暂无待同步内容</p>
+        <p class="empty-hint">Skill 写完内容后会自动出现在这里</p>
+      </div>
+    </div>
+
+    <div class="actions" id="actions" style="display:none;">
+      <button class="btn-primary" id="syncBtn">同步选中内容</button>
+    </div>
+
+    <footer class="footer">
+      <a href="#" id="settingsLink">设置</a>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

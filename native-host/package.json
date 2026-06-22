@@ -1,0 +1,10 @@
+{
+  "name": "draftpush-host",
+  "version": "0.1.0",
+  "description": "草稿推送 DraftPush - Native Messaging Host",
+  "main": "host.js",
+  "bin": {
+    "draftpush-host": "./host.js"
+  },
+  "license": "MIT"
+}

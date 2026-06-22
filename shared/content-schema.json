@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "DraftPush Content Package",
+  "description": "草稿推送标准内容包格式",
+  "type": "object",
+  "required": ["title", "body"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "内容标题"
+    },
+    "body": {
+      "type": "string",
+      "description": "正文内容（Markdown 格式）"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "标签列表"
+    },
+    "cover": {
+      "type": "string",
+      "description": "封面图相对路径"
+    },
+    "images": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "配图相对路径列表"
+    },
+    "platforms": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["xiaohongshu", "wechat_mp", "douyin"]
+      },
+      "description": "建议同步平台"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "创建时间（ISO 8601）"
+    },
+    "source_skill": {
+      "type": "string",
+      "description": "来源 Skill 名称"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "syncing", "synced", "failed"],
+      "default": "pending",
+      "description": "同步状态"
+    }
+  }
+}
