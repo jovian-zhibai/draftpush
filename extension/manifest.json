@@ -1,20 +1,22 @@
 {
   "manifest_version": 3,
   "name": "草稿推送 DraftPush",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "AI Skill 写完内容，一键同步到小红书、公众号、抖音草稿箱",
   "permissions": [
     "nativeMessaging",
     "storage",
     "notifications",
     "cookies",
-    "scripting"
+    "scripting",
+    "alarms"
   ],
   "host_permissions": [
     "https://creator.xiaohongshu.com/*",
     "https://edith.xiaohongshu.com/*",
     "https://www.xiaohongshu.com/*",
-    "https://ros-upload.xiaohongshu.com/*"
+    "https://ros-upload.xiaohongshu.com/*",
+    "https://creator.douyin.com/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js"
@@ -26,6 +28,11 @@
     {
       "matches": ["https://creator.xiaohongshu.com/*"],
       "js": ["content-scripts/xiaohongshu.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://creator.douyin.com/*"],
+      "js": ["content-scripts/douyin.js"],
       "run_at": "document_idle"
     }
   ],

@@ -22,8 +22,24 @@
 
     <div class="content-list" id="contentList"></div>
 
+    <div class="preview-panel" id="previewPanel" style="display:none;">
+      <div class="preview-header">
+        <span>内容预览</span>
+        <button class="btn-icon" id="closePreviewBtn" title="关闭">✕</button>
+      </div>
+      <div class="preview-body" id="previewBody"></div>
+    </div>
+
     <div class="actions" id="actions" style="display:none;">
-      <button class="btn-primary" id="syncBtn">同步选中内容</button>
+      <div class="actions-row">
+        <button class="btn-primary" id="syncBtn">同步选中内容</button>
+        <button class="btn-secondary" id="scheduleBtn" title="定时发布">⏰</button>
+      </div>
+      <div class="schedule-row" id="scheduleRow" style="display:none;">
+        <input type="datetime-local" id="scheduleTime" class="schedule-input">
+        <button class="btn-small" id="confirmScheduleBtn">确认定时</button>
+        <button class="btn-small btn-cancel" id="cancelScheduleBtn">取消</button>
+      </div>
     </div>
 
     <div class="log-panel" id="logPanel" style="display:none;">

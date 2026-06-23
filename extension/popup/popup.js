@@ -33,6 +33,21 @@ async function init() {
 
   document.getElementById('syncBtn').addEventListener('click', handleSync);
 
+  document.getElementById('scheduleBtn').addEventListener('click', function () {
+    var row = document.getElementById('scheduleRow');
+    row.style.display = row.style.display === 'none' ? 'flex' : 'none';
+    if (row.style.display === 'flex') {
+      var now = new Date();
+      now.setHours(now.getHours() + 1, 0, 0, 0);
+      document.getElementById('scheduleTime').value = now.toISOString().slice(0, 16);
+    }
+  });
+
+  document.getElementById('confirmScheduleBtn').addEventListener('click', handleSchedule);
+  document.getElementById('cancelScheduleBtn').addEventListener('click', function () {
+    document.getElementById('scheduleRow').style.display = 'none';
+  });
+
   document.getElementById('settingsLink').addEventListener('click', function (e) {
     e.preventDefault();
     chrome.runtime.openOptionsPage();
@@ -45,6 +60,10 @@ async function init() {
 
   document.getElementById('closeLogBtn').addEventListener('click', function () {
     document.getElementById('logPanel').style.display = 'none';
+  });
+
+  document.getElementById('closePreviewBtn').addEventListener('click', function () {
+    document.getElementById('previewPanel').style.display = 'none';
   });
 }
 
@@ -129,8 +148,10 @@ function renderItems() {
         '<div class="content-item-header">' +
         '<input type="checkbox" class="content-item-checkbox" data-index="' + index + '"' + (sel.checked ? ' checked' : '') + '>' +
         '<div class="content-item-info">' +
-        '<div class="content-item-title">' + escapeHtml(item.title || '无标题') + '</div>' +
-        '<div class="content-item-meta">' + date + (source ? ' · ' + source : '') + '</div>' +
+        '<div class="content-item-title" data-index="' + index + '">' + escapeHtml(item.title || '无标题') + '</div>' +
+        '<div class="content-item-meta">' + date + (source ? ' · ' + source : '') +
+        ' · ' + (item.images ? item.images.length : 0) + '图' +
+        '</div>' +
         '</div>' +
         '<button class="btn-dismiss" data-index="' + index + '" title="忽略此内容">✕</button>' +
         '</div>' +
@@ -158,6 +179,15 @@ function renderItems() {
     });
   });
 
+  // 点击标题显示预览
+  list.querySelectorAll('.content-item-title').forEach(function (el) {
+    el.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var idx = parseInt(e.target.dataset.index);
+      showPreview(state.items[idx]);
+    });
+  });
+
   list.querySelectorAll('.btn-dismiss').forEach(function (btn) {
     btn.addEventListener('click', async function (e) {
       e.stopPropagation();
@@ -173,6 +203,41 @@ function renderItems() {
   });
 
   updateSyncButton();
+}
+
+function showPreview(item) {
+  var panel = document.getElementById('previewPanel');
+  var body = document.getElementById('previewBody');
+
+  var tagsHtml = (item.tags || []).map(function (t) {
+    return '<span class="preview-tag">#' + escapeHtml(t) + '</span>';
+  }).join(' ');
+
+  var imagesHtml = '';
+  if (item.images && item.images.length > 0) {
+    imagesHtml = '<div class="preview-images">' + item.images.length + ' 张图片: ' +
+      item.images.map(function (img) { return escapeHtml(img); }).join(', ') +
+      '</div>';
+  }
+
+  var bodyPreview = (item.body || '')
+    .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/`(.*?)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+
+  if (bodyPreview.length > 300) {
+    bodyPreview = bodyPreview.substring(0, 300) + '...';
+  }
+
+  body.innerHTML =
+    '<div class="preview-title">' + escapeHtml(item.title || '无标题') + '</div>' +
+    '<div class="preview-text">' + escapeHtml(bodyPreview) + '</div>' +
+    (tagsHtml ? '<div class="preview-tags">' + tagsHtml + '</div>' : '') +
+    imagesHtml;
+
+  panel.style.display = 'flex';
 }
 
 function updateSyncButton() {
@@ -195,7 +260,6 @@ async function handleSync() {
   btn.disabled = true;
   btn.textContent = '同步中…';
 
-  // 自动打开日志面板
   document.getElementById('logPanel').style.display = 'flex';
 
   var selKeys = Object.keys(state.selections);
@@ -219,7 +283,7 @@ async function handleSync() {
       try {
         var result = await syncTimeout(
           chrome.runtime.sendMessage({ type: 'sync_to_platform', payload: { item: item, platform: platform } }),
-          60000
+          90000
         );
         results.push({ platform: platform, success: result.success, error: result.error, message: result.message });
       } catch (e) {
@@ -248,6 +312,47 @@ async function handleSync() {
   btn.disabled = false;
   btn.textContent = '同步选中内容';
   await refreshLogs();
+}
+
+async function handleSchedule() {
+  var timeInput = document.getElementById('scheduleTime');
+  var scheduledTime = timeInput.value;
+
+  if (!scheduledTime) {
+    showToast('请选择定时发布时间');
+    return;
+  }
+
+  var selKeys = Object.keys(state.selections);
+  var scheduled = 0;
+
+  for (var si = 0; si < selKeys.length; si++) {
+    var indexStr = selKeys[si];
+    var sel = state.selections[indexStr];
+    if (!sel.checked) continue;
+
+    var index = parseInt(indexStr);
+    var item = state.items[index];
+    var platforms = Object.keys(sel.platforms).filter(function (k) { return sel.platforms[k]; });
+    if (platforms.length === 0) continue;
+
+    try {
+      var result = await chrome.runtime.sendMessage({
+        type: 'schedule_sync',
+        payload: { item: item, platforms: platforms, scheduledTime: scheduledTime }
+      });
+      if (result.success) scheduled++;
+    } catch (e) {
+      showToast('定时设置失败: ' + e.message);
+    }
+  }
+
+  if (scheduled > 0) {
+    showToast('已设置 ' + scheduled + ' 篇内容定时发布');
+    document.getElementById('scheduleRow').style.display = 'none';
+  } else {
+    showToast('请先勾选要定时发布的内容');
+  }
 }
 
 function escapeHtml(str) {

@@ -2,9 +2,9 @@
 
 > AI Skill 写完内容，一键同步到小红书、公众号、抖音草稿箱
 
-轻量 Chrome 扩展，连接终端 AI Skill 和内容平台草稿箱。Skill 写完内容后自动出现在插件面板中，勾选目标平台，一键同步。
+轻量 Chrome 扩展，连接终端 AI Skill 和内容平台草稿箱。Skill 写完内容后自动出现在插件面板中，勾选目标平台，一键同步。支持失败自动重试和定时发布。
 
-**注意：小红书同步必须使用 Chrome 浏览器**（Dia 浏览器的内容拦截器会阻止图片 CDN 上传）。公众号同步通过 API 完成，不受浏览器限制。
+**注意：小红书和抖音同步需要使用 Chrome 浏览器**（Dia 浏览器的内容拦截器会阻止图片 CDN 上传）。公众号同步通过 API 完成，不受浏览器限制。
 
 ## 快速开始
 
@@ -15,13 +15,19 @@ Chrome 打开 `chrome://extensions`，开启开发者模式，点「加载已解
 ### 2. 安装 Native Host
 
 ```bash
-cd installer
-bash install-mac.sh
+# macOS
+cd installer && bash install-mac.sh
+
+# Linux
+cd installer && bash install-linux.sh
+
+# Windows
+cd installer && install-windows.bat
 ```
 
 安装脚本会：
-- 复制 host 程序到 `/usr/local/lib/draftpush/`
-- 注册 Native Messaging Host manifest
+- 复制 host 程序到系统目录
+- 注册 Native Messaging Host
 - 创建默认目录 `~/.draftpush/outbox/待同步/` 和 `已同步/`
 
 ### 3. 测试
@@ -29,14 +35,13 @@ bash install-mac.sh
 在 `~/.draftpush/outbox/待同步/` 下创建测试内容：
 
 ```bash
-mkdir -p ~/.draftpush/outbox/待同步/2026-06-22-测试笔记
-cat > ~/.draftpush/outbox/待同步/2026-06-22-测试笔记/content.json << 'EOF'
+mkdir -p ~/.draftpush/outbox/待同步/2026-06-23-测试笔记
+cat > ~/.draftpush/outbox/待同步/2026-06-23-测试笔记/content.json << 'EOF'
 {
   "title": "测试笔记",
-  "body": "这是一篇测试笔记\n\n## 小标题\n\n正文内容在这里。",
+  "body": "这是一篇测试笔记\n\n正文内容在这里。",
   "tags": ["测试", "草稿推送"],
   "platforms": ["xiaohongshu"],
-  "created_at": "2026-06-22T19:00:00+08:00",
   "source_skill": "manual-test",
   "status": "pending"
 }
@@ -51,15 +56,28 @@ EOF
 |------|------|------|
 | 小红书 | DOM 自动化（浏览器登录） | ✅ 已实现 |
 | 微信公众号 | API 接口（AppID + AppSecret） | ✅ 已实现 |
-| 抖音 | 待开发 | 🔜 计划中 |
+| 抖音 | DOM 自动化（浏览器登录） | ✅ 已实现 |
 
 ### 小红书
 
-通过 Chrome 创作者页面 DOM 自动化完成：上传图片 → 填入标题正文 → 存草稿。需要先在 Chrome 中登录小红书创作者中心。
+通过 Chrome 创作者页面 DOM 自动化完成。需要先在 Chrome 中登录小红书创作者中心。
 
 ### 微信公众号
 
 通过官方 API 完成，无需浏览器操作。在设置页配置 AppID 和 AppSecret，并在公众号后台将你的 IP 加入白名单。
+
+### 抖音
+
+通过 Chrome 创作者页面 DOM 自动化完成。需要先在 Chrome 中登录抖音创作者中心。
+
+## 功能特性
+
+- **一键同步** — 勾选平台，点击同步
+- **内容预览** — 点击标题预览格式化后的内容
+- **失败重试** — 同步失败自动重试 2 次，间隔递增
+- **定时发布** — 设置未来时间，到点自动同步
+- **桌面通知** — 同步成功/失败桌面提醒
+- **多格式支持** — content.json / meta.json + .md / frontmatter .md
 
 ## 对接 Skill
 
@@ -93,23 +111,32 @@ content.json 格式见 `shared/content-schema.json`。
 
 ```
 draftpush/
-├── extension/           <- Chrome 扩展
+├── extension/              <- Chrome 扩展
 │   ├── manifest.json
-│   ├── popup/           <- 面板 UI
-│   ├── background/      <- Service Worker（同步调度）
-│   ├── content-scripts/  <- 页面注入脚本（小红书编辑器操作）
-│   └── options/         <- 设置页
-├── native-host/         <- Native Messaging Host（文件读取 + 公众号 API）
-├── installer/           <- macOS 安装脚本
-└── shared/              <- 内容格式规范
+│   ├── popup/              <- 面板 UI（内容列表、预览、定时）
+│   ├── background/         <- Service Worker（同步调度、重试、定时）
+│   ├── content-scripts/    <- 页面注入脚本
+│   │   ├── xiaohongshu.js  <- 小红书编辑器操作
+│   │   └── douyin.js       <- 抖音编辑器操作
+│   └── options/            <- 设置页
+├── native-host/            <- Native Messaging Host（文件读取 + 公众号 API）
+├── installer/              <- 安装脚本（macOS / Linux / Windows）
+├── shared/                 <- 内容格式规范
+├── CONTRIBUTING.md         <- 添加新平台指南
+└── README.md
 ```
+
+## 添加新平台
+
+参见 [CONTRIBUTING.md](CONTRIBUTING.md)，包含完整的 adapter 开发指南和代码模板。
 
 ## 开发状态
 
-- [x] Phase 1: Chrome 扩展 + Native Host + 小红书 DOM 自动化 + 公众号 API
-- [ ] Phase 2: 抖音 adapter + 格式转换器 + 内容预览
-- [ ] Phase 3: 平台市场（社区贡献 adapter）
-- [ ] Phase 4: 定时推送 + Windows/Linux + Chrome Web Store
+- [x] Phase 1: Chrome 扩展 + Native Host + 小红书 + 公众号
+- [x] Phase 2: 抖音 adapter + 内容预览 + 格式转换
+- [x] Phase 3: Adapter 注册机制 + 开发文档
+- [x] Phase 4: 失败重试 + 定时发布 + 通知 + 跨平台安装
+- [ ] 下一步: Chrome Web Store 上架 + 更多平台
 
 ## License
 
