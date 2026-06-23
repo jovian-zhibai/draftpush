@@ -1,4 +1,18 @@
 (() => {
+  var DEFAULT_SELECTORS = {
+    title_input: 'input[placeholder*="填写作品标题"]',
+    editor: 'div.zone-container[contenteditable="true"]',
+    editor_fallback: '[contenteditable="true"]',
+    save_button_text: '存草稿',
+    title_max: 30,
+  };
+
+  var sel = DEFAULT_SELECTORS;
+
+  chrome.runtime.sendMessage({ type: 'get_selectors', platform: 'douyin' }, function (resp) {
+    if (resp && resp.selectors) sel = Object.assign({}, DEFAULT_SELECTORS, resp.selectors);
+  });
+
   chrome.runtime.onMessage.addListener(function (request, _sender, sendResponse) {
     if (request.type === 'douyin_fill_and_save') {
       fillAndSave(request.payload)
@@ -13,27 +27,24 @@
     function log(msg) { logs.push(msg); }
 
     try {
-      // 1. 等待标题输入框
       log('等待编辑器加载...');
-      var titleInput = await waitFor('input[placeholder*="填写作品标题"]', 120000);
+      var titleInput = await waitFor(sel.title_input, 120000);
       if (!titleInput) {
         return { success: false, error: '未找到标题输入框，请确认已上传图片且在编辑页面', logs: logs };
       }
 
-      // 2. 填入标题（抖音限制30字）
       log('填入标题...');
-      var title = (item.title || '').slice(0, 30);
+      var title = (item.title || '').slice(0, sel.title_max);
       titleInput.focus();
       titleInput.value = title;
       titleInput.dispatchEvent(new Event('input', { bubbles: true }));
       titleInput.dispatchEvent(new Event('change', { bubbles: true }));
       log('标题已填入: ' + title.substring(0, 20));
 
-      // 3. 填入正文 + 标签
       log('填入正文...');
-      var descEditor = await waitFor('div.zone-container[contenteditable="true"]', 10000);
-      if (!descEditor) {
-        descEditor = await waitFor('[contenteditable="true"]', 5000);
+      var descEditor = await waitFor(sel.editor, 10000);
+      if (!descEditor && sel.editor_fallback) {
+        descEditor = await waitFor(sel.editor_fallback, 5000);
       }
       if (!descEditor) {
         log('未找到正文编辑器，标题已填入');
@@ -43,12 +54,10 @@
       descEditor.focus();
       await delay(300);
 
-      // 清空现有内容
       document.execCommand('selectAll', false, null);
       document.execCommand('delete', false, null);
       await delay(200);
 
-      // 填入正文（去除 markdown 格式）
       var body = (item.body || '')
         .replace(/^#{1,6}\s+/gm, '')
         .replace(/\*\*(.*?)\*\*/g, '$1')
@@ -66,7 +75,6 @@
       }
       log('正文已填入 (' + lines.length + ' 行)');
 
-      // 4. 添加标签
       var tags = item.tags || [];
       if (tags.length > 0) {
         log('添加标签...');
@@ -74,23 +82,19 @@
         for (var t = 0; t < tags.length; t++) {
           document.execCommand('insertText', false, ' #' + tags[t]);
           await delay(300);
-          // 插入空格触发标签补全
           document.execCommand('insertText', false, ' ');
           await delay(500);
         }
-        // 按 Escape 关闭话题下拉
         descEditor.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }));
         log('标签已添加: ' + tags.join(', '));
       }
 
       descEditor.dispatchEvent(new Event('input', { bubbles: true }));
 
-      // 5. 尝试存草稿
       log('查找存草稿/发布按钮...');
       await delay(1000);
 
-      // 尝试找"存草稿"按钮
-      var saveBtn = findButtonByText('存草稿');
+      var saveBtn = findButtonByText(sel.save_button_text);
       if (saveBtn) {
         log('点击存草稿...');
         saveBtn.click();
@@ -112,7 +116,6 @@
     for (var i = 0; i < buttons.length; i++) {
       if (buttons[i].textContent.trim().indexOf(text) >= 0) return buttons[i];
     }
-    // Semi UI 的按钮可能在 span 里
     var spans = document.querySelectorAll('span[role="button"], div[role="button"]');
     for (var j = 0; j < spans.length; j++) {
       if (spans[j].textContent.trim().indexOf(text) >= 0) return spans[j];

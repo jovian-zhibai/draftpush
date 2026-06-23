@@ -1,4 +1,19 @@
 (() => {
+  var DEFAULT_SELECTORS = {
+    title_input: 'input.d-text[placeholder*="标题"]',
+    editor: 'div.tiptap.ProseMirror',
+    save_button_shadow: 'xhs-publish-btn',
+    save_button_class: 'button.ce-btn.white',
+    save_button_text: '暂存离开',
+    title_max: 20,
+  };
+
+  var sel = DEFAULT_SELECTORS;
+
+  chrome.runtime.sendMessage({ type: 'get_selectors', platform: 'xiaohongshu' }, function (resp) {
+    if (resp && resp.selectors) sel = Object.assign({}, DEFAULT_SELECTORS, resp.selectors);
+  });
+
   chrome.runtime.onMessage.addListener(function (request, _sender, sendResponse) {
     if (request.type === 'xhs_fill_and_save') {
       fillAndSave(request.payload)
@@ -13,39 +28,34 @@
     function log(msg) { logs.push(msg); }
 
     try {
-      // 1. 等待编辑器出现
       log('等待编辑器加载...');
-      var titleInput = await waitFor('input.d-text[placeholder*="标题"]', 5000);
-      var editor = await waitFor('div.tiptap.ProseMirror', 5000);
+      var titleInput = await waitFor(sel.title_input, 5000);
+      var editor = await waitFor(sel.editor, 5000);
 
       if (!titleInput || !editor) {
         return { success: false, error: '未找到编辑器，请确认已上传图片且在图文编辑页面', logs: logs };
       }
 
-      // 2. 填入标题（小红书限制20字）
       log('填入标题...');
-      var title = (item.title || '').slice(0, 20);
+      var title = (item.title || '').slice(0, sel.title_max);
       titleInput.focus();
       titleInput.value = title;
       titleInput.dispatchEvent(new Event('input', { bubbles: true }));
       titleInput.dispatchEvent(new Event('change', { bubbles: true }));
       log('标题已填入: ' + title);
 
-      // 3. 填入正文（不能用 selectAll，会覆盖图片）
       log('填入正文...');
       editor.focus();
       var body = item.body || '';
       body = body.replace(/^#{1,6}\s+/gm, '').replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
 
-      // 把光标移到编辑器末尾，不选中任何内容
       var range = document.createRange();
-      var sel = window.getSelection();
+      var selection = window.getSelection();
       range.selectNodeContents(editor);
       range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
+      selection.removeAllRanges();
+      selection.addRange(range);
 
-      // 逐行插入文本
       var lines = body.split('\n');
       for (var i = 0; i < lines.length; i++) {
         if (i > 0) document.execCommand('insertParagraph', false, null);
@@ -54,7 +64,6 @@
       editor.dispatchEvent(new Event('input', { bubbles: true }));
       log('正文已填入 (' + lines.length + ' 行)');
 
-      // 4. 点击存草稿
       log('查找存草稿按钮...');
       await delay(500);
 
@@ -76,31 +85,28 @@
   }
 
   function findSaveDraftButton() {
-    // 方法1: 通过 open shadow root 访问
-    var publishBtn = document.querySelector('xhs-publish-btn');
+    var publishBtn = document.querySelector(sel.save_button_shadow);
     if (publishBtn) {
       var shadow = publishBtn.shadowRoot || publishBtn._shadowRoot;
       if (shadow) {
-        var btn = shadow.querySelector('button.ce-btn.white');
+        var btn = shadow.querySelector(sel.save_button_class);
         if (btn) return btn;
       }
     }
 
-    // 方法2: 遍历所有 shadow root
     var allElements = document.querySelectorAll('*');
     for (var i = 0; i < allElements.length; i++) {
       var el = allElements[i];
       var sr = el.shadowRoot || el._shadowRoot;
       if (sr) {
-        var found = sr.querySelector('button.ce-btn.white');
+        var found = sr.querySelector(sel.save_button_class);
         if (found) return found;
       }
     }
 
-    // 方法3: 直接搜索页面上的按钮文字
     var buttons = document.querySelectorAll('button');
     for (var j = 0; j < buttons.length; j++) {
-      if (buttons[j].textContent.trim() === '暂存离开') return buttons[j];
+      if (buttons[j].textContent.trim() === sel.save_button_text) return buttons[j];
     }
 
     return null;

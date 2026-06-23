@@ -70,6 +70,30 @@ document.addEventListener('DOMContentLoaded', async function () {
     toggle.addEventListener('change', savePlatformToggles);
   });
 
+  // 同步规则
+  loadRulesStatus();
+  document.getElementById('syncRulesBtn').addEventListener('click', async function () {
+    var btn = document.getElementById('syncRulesBtn');
+    var status = document.getElementById('rulesStatus');
+    btn.disabled = true;
+    btn.textContent = '同步中…';
+    try {
+      var resp = await chrome.runtime.sendMessage({ type: 'refresh_selectors' });
+      if (resp && resp.success) {
+        status.textContent = '已更新 · v' + resp.version + ' · ' + resp.updated;
+        status.style.color = '#34c759';
+      } else {
+        status.textContent = '同步失败';
+        status.style.color = '#ff3b30';
+      }
+    } catch (e) {
+      status.textContent = '同步失败: ' + e.message;
+      status.style.color = '#ff3b30';
+    }
+    btn.disabled = false;
+    btn.textContent = '同步规则';
+  });
+
   // 加载公众号配置
   loadWechatConfig();
 
@@ -142,4 +166,15 @@ async function savePlatformToggles() {
     if (toggle.checked) enabled.push(toggle.dataset.platform);
   });
   await chrome.storage.local.set({ enabledPlatforms: enabled });
+}
+
+async function loadRulesStatus() {
+  var saved = await chrome.storage.local.get(['remoteSelectors', 'selectorsFetchedAt']);
+  var status = document.getElementById('rulesStatus');
+  if (saved.remoteSelectors) {
+    var date = new Date(saved.selectorsFetchedAt).toLocaleString('zh-CN');
+    status.textContent = 'v' + saved.remoteSelectors.version + ' · 上次同步: ' + date;
+  } else {
+    status.textContent = '未同步';
+  }
 }

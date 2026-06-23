@@ -3,6 +3,33 @@ var nativePort = null;
 var pendingItems = [];
 var fileCallbacks = {};
 
+var SELECTORS_URL = 'https://gist.githubusercontent.com/jovian-zhibai/e77bc41263ff7828e566f09d51294bc9/raw/draftpush-selectors.json';
+var remoteSelectors = null;
+
+async function fetchRemoteSelectors(force) {
+  try {
+    var cached = await chrome.storage.local.get(['remoteSelectors', 'selectorsFetchedAt']);
+    var age = Date.now() - (cached.selectorsFetchedAt || 0);
+    if (!force && cached.remoteSelectors && age < 3600000) {
+      remoteSelectors = cached.remoteSelectors;
+      return;
+    }
+    var resp = await fetch(SELECTORS_URL + '?t=' + Date.now());
+    if (resp.ok) {
+      remoteSelectors = await resp.json();
+      await chrome.storage.local.set({ remoteSelectors: remoteSelectors, selectorsFetchedAt: Date.now() });
+      addLog('info', '选择器配置已更新 (v' + remoteSelectors.version + ')');
+    }
+  } catch (e) {
+    if (cached && cached.remoteSelectors) remoteSelectors = cached.remoteSelectors;
+  }
+}
+
+function getSelectors(platform) {
+  if (remoteSelectors && remoteSelectors[platform]) return remoteSelectors[platform];
+  return null;
+}
+
 // ===== Native Host 通信 =====
 
 function connectNativeHost() {
@@ -131,6 +158,20 @@ chrome.runtime.onMessage.addListener(function (request, _sender, sendResponse) {
 
   if (request.type === 'get_logs') {
     sendResponse({ logs: syncLogs });
+    return true;
+  }
+
+  if (request.type === 'get_selectors') {
+    sendResponse({ selectors: getSelectors(request.platform) });
+    return true;
+  }
+
+  if (request.type === 'refresh_selectors') {
+    fetchRemoteSelectors(true).then(function () {
+      var v = remoteSelectors ? remoteSelectors.version : '未知';
+      var d = remoteSelectors ? remoteSelectors.updated : '';
+      sendResponse({ success: true, version: v, updated: d });
+    });
     return true;
   }
 
@@ -778,3 +819,4 @@ function waitForTabLoad(tabId, timeout) {
 }
 
 connectNativeHost();
+fetchRemoteSelectors();
