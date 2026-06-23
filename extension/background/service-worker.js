@@ -242,11 +242,13 @@ async function handleSync(payload) {
 
 async function handleBatchSync(payload) {
   var items = payload.items;
+  var publishMode = payload.publishMode || 'draft';
   var results = [];
 
   for (var i = 0; i < items.length; i++) {
     var entry = items[i];
     var item = entry.item;
+    item.publishMode = publishMode;
     var platforms = entry.platforms;
     var folder = item.folder;
 
@@ -553,7 +555,7 @@ async function syncToXiaohongshu(item) {
     var result = await withTimeout(
       chrome.tabs.sendMessage(targetTab.id, {
         type: 'xhs_fill_and_save',
-        payload: { title: item.title, body: item.body, tags: item.tags }
+        payload: { title: item.title, body: item.body, tags: item.tags, publishMode: item.publishMode || 'draft' }
       }),
       15000
     );
@@ -721,7 +723,7 @@ async function syncToDouyin(item) {
     var result = await withTimeout(
       chrome.tabs.sendMessage(targetTab.id, {
         type: 'douyin_fill_and_save',
-        payload: { title: item.title, body: item.body, tags: item.tags }
+        payload: { title: item.title, body: item.body, tags: item.tags, publishMode: item.publishMode || 'draft' }
       }),
       30000
     );

@@ -202,6 +202,24 @@ body {
   border-top: 1px solid #eee;
 }
 
+.publish-mode {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mode-option input[type="radio"] {
+  accent-color: #333;
+}
+
 .actions-row {
   display: flex;
   gap: 8px;

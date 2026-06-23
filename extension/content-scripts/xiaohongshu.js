@@ -64,8 +64,21 @@
       editor.dispatchEvent(new Event('input', { bubbles: true }));
       log('正文已填入 (' + lines.length + ' 行)');
 
-      log('查找存草稿按钮...');
+      var isDirect = item.publishMode === 'publish';
+      log(isDirect ? '查找发布按钮...' : '查找存草稿按钮...');
       await delay(500);
+
+      if (isDirect) {
+        var publishBtn = findPublishButton();
+        if (publishBtn) {
+          log('点击发布...');
+          publishBtn.click();
+          await delay(3000);
+          log('发布完成');
+          return { success: true, message: '标题和正文已填入，已点击发布', logs: logs };
+        }
+        log('未找到发布按钮，尝试存草稿...');
+      }
 
       var saveBtn = findSaveDraftButton();
       if (saveBtn) {
@@ -76,12 +89,29 @@
         return { success: true, message: '标题和正文已填入，已点击存草稿', logs: logs };
       }
 
-      log('未找到存草稿按钮，内容已填入，请手动保存');
-      return { success: true, message: '标题和正文已填入，请手动点击"暂存离开"保存草稿', logs: logs };
+      log('未找到按钮，内容已填入，请手动操作');
+      return { success: true, message: '标题和正文已填入，请手动保存或发布', logs: logs };
 
     } catch (e) {
       return { success: false, error: e.message, logs: logs };
     }
+  }
+
+  function findPublishButton() {
+    var publishBtn = document.querySelector(sel.save_button_shadow);
+    if (publishBtn) {
+      var shadow = publishBtn.shadowRoot || publishBtn._shadowRoot;
+      if (shadow) {
+        var btn = shadow.querySelector('button.ce-btn.red') || shadow.querySelector('button.ce-btn.primary');
+        if (btn) return btn;
+      }
+    }
+    var buttons = document.querySelectorAll('button');
+    for (var i = 0; i < buttons.length; i++) {
+      var text = buttons[i].textContent.trim();
+      if (text === '发布' || text === '发布笔记') return buttons[i];
+    }
+    return null;
   }
 
   function findSaveDraftButton() {

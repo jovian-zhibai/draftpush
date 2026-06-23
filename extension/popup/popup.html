@@ -31,6 +31,16 @@
     </div>
 
     <div class="actions" id="actions" style="display:none;">
+      <div class="publish-mode">
+        <label class="mode-option">
+          <input type="radio" name="publishMode" value="draft" checked>
+          <span>存草稿</span>
+        </label>
+        <label class="mode-option">
+          <input type="radio" name="publishMode" value="publish">
+          <span>直接发布</span>
+        </label>
+      </div>
       <div class="actions-row">
         <button class="btn-primary" id="syncBtn">同步选中内容</button>
         <button class="btn-secondary" id="scheduleBtn" title="定时发布">⏰</button>

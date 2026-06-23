@@ -91,8 +91,21 @@
 
       descEditor.dispatchEvent(new Event('input', { bubbles: true }));
 
-      log('查找存草稿/发布按钮...');
+      var isDirect = item.publishMode === 'publish';
+      log(isDirect ? '查找发布按钮...' : '查找存草稿按钮...');
       await delay(1000);
+
+      if (isDirect) {
+        var publishBtn = findButtonByText('发布');
+        if (publishBtn) {
+          log('点击发布...');
+          publishBtn.click();
+          await delay(3000);
+          log('发布完成');
+          return { success: true, message: '标题和正文已填入，已点击发布', logs: logs };
+        }
+        log('未找到发布按钮，尝试存草稿...');
+      }
 
       var saveBtn = findButtonByText(sel.save_button_text);
       if (saveBtn) {
@@ -103,8 +116,8 @@
         return { success: true, message: '标题和正文已填入，已点击存草稿', logs: logs };
       }
 
-      log('未找到存草稿按钮，内容已填入，请手动保存');
-      return { success: true, message: '标题和正文已填入，请手动保存', logs: logs };
+      log('未找到按钮，内容已填入，请手动操作');
+      return { success: true, message: '标题和正文已填入，请手动保存或发布', logs: logs };
 
     } catch (e) {
       return { success: false, error: e.message, logs: logs };

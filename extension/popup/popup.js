@@ -289,12 +289,17 @@ async function handleSync() {
 
   renderItems();
 
+  var publishMode = document.querySelector('input[name="publishMode"]:checked').value;
+
   // 发送批量同步请求给 service worker（即使 popup 关了也会继续）
   try {
     var batchResult = await syncTimeout(
       chrome.runtime.sendMessage({
         type: 'sync_batch',
-        payload: { items: batchItems.map(function (b) { return { item: b.item, platforms: b.platforms }; }) }
+        payload: {
+          publishMode: publishMode,
+          items: batchItems.map(function (b) { return { item: b.item, platforms: b.platforms }; })
+        }
       }),
       300000
     );
