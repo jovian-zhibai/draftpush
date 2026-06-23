@@ -98,18 +98,25 @@
   }
 
   function findPublishButton() {
-    var publishBtn = document.querySelector(sel.save_button_shadow);
-    if (publishBtn) {
-      var shadow = publishBtn.shadowRoot || publishBtn._shadowRoot;
+    var publishEl = document.querySelector(sel.save_button_shadow);
+    if (publishEl) {
+      var shadow = publishEl.shadowRoot || publishEl._shadowRoot;
       if (shadow) {
-        var btn = shadow.querySelector('button.ce-btn.red') || shadow.querySelector('button.ce-btn.primary');
+        var btn = shadow.querySelector('button.ce-btn.bg-red');
         if (btn) return btn;
       }
     }
+    var allElements = document.querySelectorAll('*');
+    for (var i = 0; i < allElements.length; i++) {
+      var sr = allElements[i].shadowRoot || allElements[i]._shadowRoot;
+      if (sr) {
+        var found = sr.querySelector('button.ce-btn.bg-red');
+        if (found) return found;
+      }
+    }
     var buttons = document.querySelectorAll('button');
-    for (var i = 0; i < buttons.length; i++) {
-      var text = buttons[i].textContent.trim();
-      if (text === '发布' || text === '发布笔记') return buttons[i];
+    for (var j = 0; j < buttons.length; j++) {
+      if (buttons[j].textContent.trim() === '发布') return buttons[j];
     }
     return null;
   }
