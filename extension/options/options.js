@@ -62,6 +62,14 @@ document.addEventListener('DOMContentLoaded', async function () {
     showStatus('success', '设置已保存');
   });
 
+  // 加载平台启用状态
+  loadPlatformToggles();
+
+  // 平台启用/禁用
+  document.querySelectorAll('.platform-toggle').forEach(function (toggle) {
+    toggle.addEventListener('change', savePlatformToggles);
+  });
+
   // 加载公众号配置
   loadWechatConfig();
 
@@ -118,4 +126,20 @@ function showWechatStatus(type, msg) {
   if (type === 'success') {
     setTimeout(function () { el.style.display = 'none'; el.className = 'status-msg'; }, 3000);
   }
+}
+
+async function loadPlatformToggles() {
+  var saved = await chrome.storage.local.get(['enabledPlatforms']);
+  var enabled = saved.enabledPlatforms || ['xiaohongshu'];
+  document.querySelectorAll('.platform-toggle').forEach(function (toggle) {
+    toggle.checked = enabled.indexOf(toggle.dataset.platform) >= 0;
+  });
+}
+
+async function savePlatformToggles() {
+  var enabled = [];
+  document.querySelectorAll('.platform-toggle').forEach(function (toggle) {
+    if (toggle.checked) enabled.push(toggle.dataset.platform);
+  });
+  await chrome.storage.local.set({ enabledPlatforms: enabled });
 }

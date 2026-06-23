@@ -51,6 +51,8 @@
       display: flex; align-items: center; justify-content: space-between;
       padding: 12px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 8px;
     }
+    .platform-card div { display: flex; align-items: center; gap: 8px; }
+    .platform-toggle { accent-color: #333; }
     .platform-name { font-weight: 500; }
     .platform-auth { font-size: 12px; color: #999; margin-left: 8px; }
     .platform-status { font-size: 12px; color: #34c759; }
@@ -124,16 +126,19 @@
   </div>
 
   <div class="section">
-    <h2>已启用平台</h2>
+    <h2>平台管理</h2>
+    <p class="field hint" style="margin-bottom:12px;">勾选你要使用的平台，未勾选的不会在同步面板中显示</p>
     <div class="platform-card">
       <div>
+        <input type="checkbox" class="platform-toggle" data-platform="xiaohongshu" checked>
         <span class="platform-name">小红书</span>
         <span class="platform-auth">浏览器登录</span>
       </div>
-      <span class="platform-status">已启用</span>
+      <span class="platform-status">免配置</span>
     </div>
     <div class="platform-card">
       <div>
+        <input type="checkbox" class="platform-toggle" data-platform="wechat_mp">
         <span class="platform-name">微信公众号</span>
         <span class="platform-auth">API 接口</span>
       </div>
@@ -141,10 +146,11 @@
     </div>
     <div class="platform-card">
       <div>
+        <input type="checkbox" class="platform-toggle" data-platform="douyin">
         <span class="platform-name">抖音</span>
         <span class="platform-auth">浏览器登录</span>
       </div>
-      <span class="platform-status">已启用</span>
+      <span class="platform-status">免配置</span>
     </div>
   </div>
 

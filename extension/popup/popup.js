@@ -7,11 +7,13 @@ var PLATFORMS = {
 var state = {
   items: [],
   selections: {},
+  enabledPlatforms: ['xiaohongshu', 'wechat_mp', 'douyin'],
 };
 
 document.addEventListener('DOMContentLoaded', init);
 
 async function init() {
+  await loadEnabledPlatforms();
   checkHostConnection();
   await loadPendingItems();
 
@@ -128,7 +130,7 @@ function renderItems() {
       var date = item.created_at ? new Date(item.created_at).toLocaleDateString('zh-CN') : '';
       var source = item.source_skill || '';
 
-      var platformTags = Object.keys(PLATFORMS)
+      var platformTags = state.enabledPlatforms
         .map(function (pid) {
           var selected = sel.platforms[pid] ? 'selected' : '';
           return '<span class="platform-tag ' + selected + '" data-index="' + index + '" data-platform="' + pid + '">' + PLATFORMS[pid] + '</span>';
@@ -262,6 +264,8 @@ async function handleSync() {
 
   document.getElementById('logPanel').style.display = 'flex';
 
+  // 收集所有要同步的内容
+  var batchItems = [];
   var selKeys = Object.keys(state.selections);
   for (var si = 0; si < selKeys.length; si++) {
     var indexStr = selKeys[si];
@@ -271,47 +275,78 @@ async function handleSync() {
     var index = parseInt(indexStr);
     var item = state.items[index];
     var platforms = Object.keys(sel.platforms).filter(function (k) { return sel.platforms[k]; });
-
     if (platforms.length === 0) continue;
 
     sel.status = 'syncing';
-    renderItems();
-
-    var results = [];
-    for (var i = 0; i < platforms.length; i++) {
-      var platform = platforms[i];
-      try {
-        var result = await syncTimeout(
-          chrome.runtime.sendMessage({ type: 'sync_to_platform', payload: { item: item, platform: platform } }),
-          90000
-        );
-        results.push({ platform: platform, success: result.success, error: result.error, message: result.message });
-      } catch (e) {
-        results.push({ platform: platform, success: false, error: e.message });
-      }
-    }
-
-    var allOk = results.every(function (r) { return r.success; });
-    if (allOk) {
-      sel.status = 'success';
-      sel.statusText = '已同步到 ' + platforms.map(function (p) { return PLATFORMS[p]; }).join('、');
-      try {
-        await chrome.runtime.sendMessage({ type: 'archive', folder: item.folder });
-      } catch (e) {}
-    } else {
-      sel.status = 'error';
-      sel.statusText = results
-        .filter(function (r) { return !r.success; })
-        .map(function (r) { return PLATFORMS[r.platform] + ': ' + (r.error || '未知错误'); })
-        .join('; ');
-    }
-
-    renderItems();
+    batchItems.push({ item: item, platforms: platforms, selIndex: indexStr });
   }
 
+  if (batchItems.length === 0) {
+    btn.disabled = false;
+    btn.textContent = '同步选中内容';
+    return;
+  }
+
+  renderItems();
+
+  // 发送批量同步请求给 service worker（即使 popup 关了也会继续）
+  try {
+    var batchResult = await syncTimeout(
+      chrome.runtime.sendMessage({
+        type: 'sync_batch',
+        payload: { items: batchItems.map(function (b) { return { item: b.item, platforms: b.platforms }; }) }
+      }),
+      300000
+    );
+
+    // 同步完成，从 service worker 读取状态更新 UI
+    if (batchResult && batchResult.results) {
+      for (var ri = 0; ri < batchResult.results.length; ri++) {
+        var r = batchResult.results[ri];
+        var matchEntry = batchItems.find(function (b) { return b.item.folder === r.folder; });
+        if (matchEntry) {
+          var sel = state.selections[matchEntry.selIndex];
+          if (r.allOk) {
+            sel.status = 'success';
+            sel.statusText = '已同步并归档';
+          } else {
+            sel.status = 'error';
+            var statusResp = await chrome.runtime.sendMessage({ type: 'get_sync_status' });
+            if (statusResp && statusResp.statuses && statusResp.statuses[r.folder]) {
+              sel.statusText = statusResp.statuses[r.folder].text;
+            } else {
+              sel.statusText = '部分平台同步失败';
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // popup 可能中途关了又开了，尝试从 service worker 获取最新状态
+    try {
+      var statusResp = await chrome.runtime.sendMessage({ type: 'get_sync_status' });
+      if (statusResp && statusResp.statuses) {
+        for (var si2 = 0; si2 < batchItems.length; si2++) {
+          var folder = batchItems[si2].item.folder;
+          var status = statusResp.statuses[folder];
+          if (status) {
+            var sel2 = state.selections[batchItems[si2].selIndex];
+            sel2.status = status.status;
+            sel2.statusText = status.text;
+          }
+        }
+      }
+    } catch (e2) {}
+  }
+
+  renderItems();
   btn.disabled = false;
   btn.textContent = '同步选中内容';
   await refreshLogs();
+
+  // 刷新内容列表（已归档的会消失）
+  await new Promise(function (r) { setTimeout(r, 1000); });
+  await loadPendingItems();
 }
 
 async function handleSchedule() {
@@ -410,4 +445,13 @@ function showToast(msg) {
     toast.classList.remove('show');
     setTimeout(function () { toast.remove(); }, 300);
   }, 2000);
+}
+
+async function loadEnabledPlatforms() {
+  try {
+    var saved = await chrome.storage.local.get(['enabledPlatforms']);
+    if (saved.enabledPlatforms && saved.enabledPlatforms.length > 0) {
+      state.enabledPlatforms = saved.enabledPlatforms;
+    }
+  } catch (e) {}
 }

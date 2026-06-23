@@ -102,6 +102,16 @@ chrome.runtime.onMessage.addListener(function (request, _sender, sendResponse) {
     return true;
   }
 
+  if (request.type === 'sync_batch') {
+    handleBatchSync(request.payload).then(sendResponse);
+    return true;
+  }
+
+  if (request.type === 'get_sync_status') {
+    sendResponse({ statuses: syncStatuses });
+    return true;
+  }
+
   if (request.type === 'archive') {
     sendToHost({ type: 'archive', payload: { folder: request.folder } });
     sendResponse({ ok: true });
@@ -167,6 +177,8 @@ var PLATFORM_ADAPTERS = {
   douyin: { name: '抖音', sync: syncToDouyin },
 };
 
+var syncStatuses = {};
+
 async function handleSync(payload) {
   var item = payload.item;
   var platform = payload.platform;
@@ -185,6 +197,46 @@ async function handleSync(payload) {
     addLog('error', '同步异常: ' + e.message);
     return { success: false, error: e.message };
   }
+}
+
+async function handleBatchSync(payload) {
+  var items = payload.items;
+  var results = [];
+
+  for (var i = 0; i < items.length; i++) {
+    var entry = items[i];
+    var item = entry.item;
+    var platforms = entry.platforms;
+    var folder = item.folder;
+
+    syncStatuses[folder] = { status: 'syncing', text: '同步中…' };
+
+    var entryResults = [];
+    for (var j = 0; j < platforms.length; j++) {
+      var result = await handleSync({ item: item, platform: platforms[j] });
+      entryResults.push({ platform: platforms[j], success: result.success, error: result.error, message: result.message });
+    }
+
+    var allOk = entryResults.every(function (r) { return r.success; });
+    if (allOk) {
+      syncStatuses[folder] = {
+        status: 'success',
+        text: '已同步到 ' + platforms.map(function (p) { return PLATFORM_ADAPTERS[p] ? PLATFORM_ADAPTERS[p].name : p; }).join('、')
+      };
+      sendToHost({ type: 'archive', payload: { folder: folder } });
+      addLog('success', '「' + (item.title || '无标题') + '」已归档');
+    } else {
+      var errorText = entryResults
+        .filter(function (r) { return !r.success; })
+        .map(function (r) { return (PLATFORM_ADAPTERS[r.platform] ? PLATFORM_ADAPTERS[r.platform].name : r.platform) + ': ' + (r.error || '未知错误'); })
+        .join('; ');
+      syncStatuses[folder] = { status: 'error', text: errorText };
+    }
+
+    results.push({ folder: folder, results: entryResults, allOk: allOk });
+  }
+
+  return { success: true, results: results };
 }
 
 // ===== 重试机制 =====
