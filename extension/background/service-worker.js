@@ -353,48 +353,110 @@ async function handleSync(payload) {
 }
 
 async function handleBatchSync(payload) {
+  if (isSyncing) {
+    return { success: false, error: '同步正在进行中，请等待完成' };
+  }
+  isSyncing = true;
+  startKeepAlive();
+
   var items = payload.items;
   var publishMode = payload.publishMode || 'draft';
   var results = [];
+  var totalItems = items.length;
   syncCancelled = false;
 
-  for (var i = 0; i < items.length; i++) {
-    if (syncCancelled) {
-      addLog('info', '同步已取消');
-      break;
+  try {
+    for (var i = 0; i < items.length; i++) {
+      if (syncCancelled) {
+        addLog('info', '同步已取消');
+        break;
+      }
+      var entry = items[i];
+      var item = entry.item;
+      item.publishMode = publishMode;
+      var platforms = entry.platforms;
+      var folder = item.folder;
+      var progressText = '(' + (i + 1) + '/' + totalItems + ') ';
+
+      syncStatuses[folder] = { status: 'syncing', text: progressText + (publishMode === 'publish' ? '发布中…' : '同步中…') };
+
+      // 内容校验
+      var allErrors = [];
+      for (var v = 0; v < platforms.length; v++) {
+        var vErrors = validateItem(item, platforms[v]);
+        if (vErrors.length > 0) {
+          allErrors.push((PLATFORM_ADAPTERS[platforms[v]] ? PLATFORM_ADAPTERS[platforms[v]].name : platforms[v]) + ': ' + vErrors.join(', '));
+        }
+      }
+      if (allErrors.length > 0) {
+        syncStatuses[folder] = { status: 'error', text: allErrors.join('; ') };
+        results.push({ folder: folder, results: [], allOk: false, error: allErrors.join('; ') });
+        addLog('error', '校验失败: ' + allErrors.join('; '));
+        continue;
+      }
+
+      var entryResults = [];
+      for (var j = 0; j < platforms.length; j++) {
+        if (syncCancelled) break;
+        var platform = platforms[j];
+
+        // 登录检测
+        var loginCheck = await checkPlatformLogin(platform);
+        if (!loginCheck.loggedIn) {
+          entryResults.push({ platform: platform, success: false, error: loginCheck.error });
+          addLog('error', loginCheck.error);
+          continue;
+        }
+
+        // 防重复发布
+        var alreadySynced = await wasSynced(folder, platform);
+        if (alreadySynced) {
+          var pName = PLATFORM_ADAPTERS[platform] ? PLATFORM_ADAPTERS[platform].name : platform;
+          addLog('warn', '「' + (item.title || '') + '」已同步过' + pName + '，跳过');
+          entryResults.push({ platform: platform, success: true, message: '已同步过，跳过' });
+          continue;
+        }
+
+        // 速率控制：同一平台间隔 10 秒
+        var lastTime = lastPlatformSyncTime[platform] || 0;
+        var elapsed = Date.now() - lastTime;
+        if (elapsed < 10000) {
+          var waitMs = 10000 - elapsed;
+          addLog('info', '等待 ' + Math.ceil(waitMs / 1000) + ' 秒（速率控制）');
+          await new Promise(function (r) { setTimeout(r, waitMs); });
+        }
+
+        syncStatuses[folder] = { status: 'syncing', text: progressText + (PLATFORM_ADAPTERS[platform] ? PLATFORM_ADAPTERS[platform].name : platform) + '…' };
+
+        var result = await handleSync({ item: item, platform: platform });
+        lastPlatformSyncTime[platform] = Date.now();
+        entryResults.push({ platform: platform, success: result.success, error: result.error, message: result.message });
+
+        // 记录历史
+        await saveSyncHistory(item, platform, result.success, result.message || result.error);
+      }
+
+      var allOk = entryResults.length > 0 && entryResults.every(function (r) { return r.success; });
+      if (allOk) {
+        syncStatuses[folder] = {
+          status: 'success',
+          text: '已同步到 ' + platforms.map(function (p) { return PLATFORM_ADAPTERS[p] ? PLATFORM_ADAPTERS[p].name : p; }).join('、')
+        };
+        sendToHost({ type: 'archive', payload: { folder: folder } });
+        addLog('success', '「' + (item.title || '无标题') + '」已归档');
+      } else {
+        var errorText = entryResults
+          .filter(function (r) { return !r.success; })
+          .map(function (r) { return (PLATFORM_ADAPTERS[r.platform] ? PLATFORM_ADAPTERS[r.platform].name : r.platform) + ': ' + (r.error || '未知错误'); })
+          .join('; ');
+        if (errorText) syncStatuses[folder] = { status: 'error', text: errorText };
+      }
+
+      results.push({ folder: folder, results: entryResults, allOk: allOk });
     }
-    var entry = items[i];
-    var item = entry.item;
-    item.publishMode = publishMode;
-    var platforms = entry.platforms;
-    var folder = item.folder;
-
-    syncStatuses[folder] = { status: 'syncing', text: publishMode === 'publish' ? '发布中…' : '同步中…' };
-
-    var entryResults = [];
-    for (var j = 0; j < platforms.length; j++) {
-      if (syncCancelled) break;
-      var result = await handleSync({ item: item, platform: platforms[j] });
-      entryResults.push({ platform: platforms[j], success: result.success, error: result.error, message: result.message });
-    }
-
-    var allOk = entryResults.every(function (r) { return r.success; });
-    if (allOk) {
-      syncStatuses[folder] = {
-        status: 'success',
-        text: '已同步到 ' + platforms.map(function (p) { return PLATFORM_ADAPTERS[p] ? PLATFORM_ADAPTERS[p].name : p; }).join('、')
-      };
-      sendToHost({ type: 'archive', payload: { folder: folder } });
-      addLog('success', '「' + (item.title || '无标题') + '」已归档');
-    } else {
-      var errorText = entryResults
-        .filter(function (r) { return !r.success; })
-        .map(function (r) { return (PLATFORM_ADAPTERS[r.platform] ? PLATFORM_ADAPTERS[r.platform].name : r.platform) + ': ' + (r.error || '未知错误'); })
-        .join('; ');
-      syncStatuses[folder] = { status: 'error', text: errorText };
-    }
-
-    results.push({ folder: folder, results: entryResults, allOk: allOk });
+  } finally {
+    isSyncing = false;
+    stopKeepAlive();
   }
 
   return { success: true, results: results };
