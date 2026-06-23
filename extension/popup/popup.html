@@ -20,18 +20,23 @@
       <span class="status-text" id="statusText">检查连接中…</span>
     </div>
 
-    <div class="content-list" id="contentList">
-      <div class="empty-state" id="emptyState">
-        <p>暂无待同步内容</p>
-        <p class="empty-hint">Skill 写完内容后会自动出现在这里</p>
-      </div>
-    </div>
+    <div class="content-list" id="contentList"></div>
 
     <div class="actions" id="actions" style="display:none;">
       <button class="btn-primary" id="syncBtn">同步选中内容</button>
     </div>
 
+    <div class="log-panel" id="logPanel" style="display:none;">
+      <div class="log-header">
+        <span>同步日志</span>
+        <button class="btn-icon" id="closeLogBtn" title="关闭">✕</button>
+      </div>
+      <div class="log-list" id="logList"></div>
+    </div>
+
     <footer class="footer">
+      <a href="#" id="logLink">日志</a>
+      <span class="footer-sep">·</span>
       <a href="#" id="settingsLink">设置</a>
     </footer>
   </div>

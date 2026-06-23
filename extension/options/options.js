@@ -1,9 +1,9 @@
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', async function () {
   // 检查 host 连接
   try {
-    const resp = await chrome.runtime.sendMessage({ type: 'check_host' });
-    const dot = document.getElementById('hostDot');
-    const text = document.getElementById('hostStatus');
+    var resp = await chrome.runtime.sendMessage({ type: 'check_host' });
+    var dot = document.getElementById('hostDot');
+    var text = document.getElementById('hostStatus');
     if (resp.connected) {
       dot.className = 'host-dot ok';
       text.textContent = 'Native Host 已连接';
@@ -17,9 +17,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // 加载已保存的设置
-  const saved = await chrome.storage.local.get(['dirType', 'obsidianDir', 'customDir']);
-  const dirType = saved.dirType || 'default';
-  const radio = document.querySelector('input[value="' + dirType + '"]');
+  var saved = await chrome.storage.local.get(['dirType', 'obsidianDir', 'customDir']);
+  var dirType = saved.dirType || 'default';
+  var radio = document.querySelector('input[value="' + dirType + '"]');
   if (radio) radio.checked = true;
   if (saved.obsidianDir) document.getElementById('obsidianDir').value = saved.obsidianDir;
   if (saved.customDir) document.getElementById('customDir').value = saved.customDir;
@@ -49,7 +49,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     await chrome.storage.local.set({ dirType: type, obsidianDir: obsidianDir, customDir: customDir });
-    showStatus('success', '设置已保存，重启插件后生效');
+
+    // 同步目录配置到 Native Host
+    var watchDir = '';
+    if (type === 'obsidian') watchDir = obsidianDir;
+    if (type === 'custom') watchDir = customDir;
+
+    if (watchDir) {
+      await chrome.runtime.sendMessage({ type: 'update_host_config', payload: { watch_dir: watchDir } });
+    }
+
+    showStatus('success', '设置已保存');
   });
 });
 
@@ -60,6 +70,49 @@ function updatePathVisibility(type) {
 
 function showStatus(type, msg) {
   var el = document.getElementById('saveStatus');
+  el.className = 'status-msg ' + type;
+  el.textContent = msg;
+  if (type === 'success') {
+    setTimeout(function () { el.style.display = 'none'; el.className = 'status-msg'; }, 3000);
+  }
+}
+
+// ===== 公众号配置 =====
+
+async function loadWechatConfig() {
+  var saved = await chrome.storage.local.get(['wechatMpAppId', 'wechatMpAppSecret']);
+  if (saved.wechatMpAppId) {
+    document.getElementById('wechatMpAppId').value = saved.wechatMpAppId;
+    document.getElementById('wechatMpAppSecret').value = saved.wechatMpAppSecret ? '••••••••' : '';
+    document.getElementById('wechatMpStatus').textContent = '已配置';
+    document.getElementById('wechatMpStatus').style.color = '#34c759';
+  }
+}
+
+loadWechatConfig();
+
+document.getElementById('saveWechatBtn').addEventListener('click', async function () {
+  var appId = document.getElementById('wechatMpAppId').value.trim();
+  var appSecret = document.getElementById('wechatMpAppSecret').value.trim();
+
+  if (!appId) {
+    showWechatStatus('error', '请填写 AppID');
+    return;
+  }
+
+  var saveData = { wechatMpAppId: appId };
+  if (appSecret && appSecret !== '••••••••') {
+    saveData.wechatMpAppSecret = appSecret;
+  }
+
+  await chrome.storage.local.set(saveData);
+  document.getElementById('wechatMpStatus').textContent = '已配置';
+  document.getElementById('wechatMpStatus').style.color = '#34c759';
+  showWechatStatus('success', '公众号配置已保存');
+});
+
+function showWechatStatus(type, msg) {
+  var el = document.getElementById('wechatSaveStatus');
   el.className = 'status-msg ' + type;
   el.textContent = msg;
   if (type === 'success') {

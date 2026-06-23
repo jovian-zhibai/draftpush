@@ -132,6 +132,29 @@
       </div>
       <span class="platform-status">已启用</span>
     </div>
+    <div class="platform-card">
+      <div>
+        <span class="platform-name">微信公众号</span>
+        <span class="platform-auth">API 接口</span>
+      </div>
+      <span class="platform-status" id="wechatMpStatus">未配置</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>公众号配置</h2>
+    <div class="field">
+      <label>AppID</label>
+      <input type="text" id="wechatMpAppId" placeholder="wx1234567890abcdef" style="font-family: monospace;">
+      <div class="hint">在公众号后台 → 开发 → 基本配置 中获取</div>
+    </div>
+    <div class="field">
+      <label>AppSecret</label>
+      <input type="password" id="wechatMpAppSecret" placeholder="••••••••••••••••••••••••">
+      <div class="hint">同上，注意保密。还需要在公众号后台把你的 IP 加到白名单</div>
+    </div>
+    <button class="btn btn-primary" id="saveWechatBtn">保存公众号配置</button>
+    <div class="status-msg" id="wechatSaveStatus"></div>
   </div>
 
   <script src="options.js"></script>
