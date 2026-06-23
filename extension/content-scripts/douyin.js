@@ -74,8 +74,8 @@
         for (var t = 0; t < tags.length; t++) {
           document.execCommand('insertText', false, ' #' + tags[t]);
           await delay(300);
-          // 按空格确认标签
-          descEditor.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true }));
+          // 插入空格触发标签补全
+          document.execCommand('insertText', false, ' ');
           await delay(500);
         }
         // 按 Escape 关闭话题下拉

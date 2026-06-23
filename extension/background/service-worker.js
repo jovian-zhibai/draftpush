@@ -237,7 +237,7 @@ function isNonRetryableError(error) {
 function notifySuccess(platformName, title) {
   chrome.notifications.create({
     type: 'basic',
-    iconUrl: chrome.runtime.getURL('icon128.png'),
+    iconUrl: chrome.runtime.getURL('icons/icon128.png'),
     title: '同步成功',
     message: '「' + (title || '无标题') + '」已同步到' + platformName,
   });
@@ -246,7 +246,7 @@ function notifySuccess(platformName, title) {
 function notifyFailure(platformName, title, error) {
   chrome.notifications.create({
     type: 'basic',
-    iconUrl: chrome.runtime.getURL('icon128.png'),
+    iconUrl: chrome.runtime.getURL('icons/icon128.png'),
     title: '同步失败',
     message: platformName + '：' + (error || '未知错误'),
   });
@@ -264,7 +264,9 @@ async function scheduleSync(payload) {
 
   var entry = {
     id: id,
-    item: payload.item,
+    title: payload.item.title || '无标题',
+    folder: payload.item.folder,
+    folder_path: payload.item.folder_path,
     platforms: payload.platforms,
     scheduledTime: scheduledTime,
     createdAt: Date.now(),
@@ -303,10 +305,24 @@ chrome.alarms.onAlarm.addListener(async function (alarm) {
 
   if (!entry) return;
 
-  addLog('info', '定时发布触发：「' + (entry.item.title || '无标题') + '」');
+  addLog('info', '定时发布触发：「' + (entry.title || '无标题') + '」');
 
-  for (var i = 0; i < entry.platforms.length; i++) {
-    await handleSync({ item: entry.item, platform: entry.platforms[i] });
+  // 从 pendingItems 里找最新的 item 数据（可能已被刷新）
+  var item = pendingItems.find(function (p) { return p.folder === entry.folder; });
+  if (!item) {
+    // 如果 pending 里没有，尝试刷新一次
+    if (nativePort) nativePort.postMessage({ type: 'list_pending' });
+    await new Promise(function (r) { setTimeout(r, 1000); });
+    item = pendingItems.find(function (p) { return p.folder === entry.folder; });
+  }
+
+  if (!item) {
+    addLog('error', '定时发布失败：内容「' + entry.title + '」已不在待同步列表中');
+    notifyFailure('定时发布', entry.title, '内容已不在待同步列表');
+  } else {
+    for (var i = 0; i < entry.platforms.length; i++) {
+      await handleSync({ item: item, platform: entry.platforms[i] });
+    }
   }
 
   // 发布完成后移除
