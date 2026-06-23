@@ -66,18 +66,48 @@
 
       var isDirect = item.publishMode === 'publish';
       log(isDirect ? '查找发布按钮...' : '查找存草稿按钮...');
-      await delay(500);
+      await delay(1000);
 
       if (isDirect) {
         var publishBtn = findPublishButton();
+        if (!publishBtn) {
+          log('发布按钮未立即出现，等待中...');
+          await delay(3000);
+          publishBtn = findPublishButton();
+        }
         if (publishBtn) {
+          if (publishBtn.disabled) {
+            log('发布按钮暂时不可用，等待...');
+            await delay(3000);
+          }
           log('点击发布...');
           publishBtn.click();
-          await delay(3000);
+          await delay(2000);
+
+          // 处理确认对话框
+          var confirmBtn = document.querySelector('.modal-footer .btn-primary') ||
+                          document.querySelector('.xhs-dialog .btn-primary') ||
+                          document.querySelector('button.ce-btn.bg-red:not([disabled])');
+          if (!confirmBtn) {
+            var allBtns = document.querySelectorAll('button');
+            for (var b = 0; b < allBtns.length; b++) {
+              var btnText = allBtns[b].textContent.trim();
+              if (btnText === '确认' || btnText === '确认发布' || btnText === '确定') {
+                confirmBtn = allBtns[b];
+                break;
+              }
+            }
+          }
+          if (confirmBtn && confirmBtn !== publishBtn) {
+            log('点击确认发布...');
+            confirmBtn.click();
+            await delay(3000);
+          }
+
           log('发布完成');
           return { success: true, message: '标题和正文已填入，已点击发布', logs: logs };
         }
-        log('未找到发布按钮，尝试存草稿...');
+        log('未找到发布按钮，降级为存草稿...');
       }
 
       var saveBtn = findSaveDraftButton();

@@ -2,9 +2,104 @@ var HOST_NAME = 'com.draftpush.host';
 var nativePort = null;
 var pendingItems = [];
 var fileCallbacks = {};
+var isSyncing = false;
+var lastPlatformSyncTime = {};
 
 var SELECTORS_URL = 'https://gist.githubusercontent.com/jovian-zhibai/e77bc41263ff7828e566f09d51294bc9/raw/draftpush-selectors.json';
 var remoteSelectors = null;
+
+// ===== Service Worker 保活 =====
+
+function startKeepAlive() {
+  chrome.alarms.create('keepalive', { periodInMinutes: 0.4 });
+}
+
+function stopKeepAlive() {
+  chrome.alarms.clear('keepalive');
+}
+
+// ===== 内容校验 =====
+
+var PLATFORM_LIMITS = {
+  xiaohongshu: { title_max: 20, images_min: 1, images_max: 9 },
+  douyin: { title_max: 30, images_min: 1, images_max: 35 },
+  wechat_mp: { title_max: 64, images_min: 0, images_max: 999 },
+};
+
+function validateItem(item, platform) {
+  var limits = PLATFORM_LIMITS[platform];
+  if (!limits) return [];
+  var errors = [];
+  if (!item.title || !item.title.trim()) errors.push('标题不能为空');
+  if (limits.title_max && item.title && item.title.length > limits.title_max) {
+    errors.push('标题超过' + limits.title_max + '字（当前' + item.title.length + '字）');
+  }
+  var imgCount = (item.images || []).length;
+  if (limits.images_min > 0 && imgCount < limits.images_min) {
+    errors.push('至少需要' + limits.images_min + '张图片');
+  }
+  if (imgCount > limits.images_max) {
+    errors.push('最多' + limits.images_max + '张图片（当前' + imgCount + '张）');
+  }
+  return errors;
+}
+
+// ===== 登录检测 =====
+
+async function checkPlatformLogin(platform) {
+  if (platform === 'wechat_mp') return { loggedIn: true };
+
+  var urls = {
+    xiaohongshu: 'https://creator.xiaohongshu.com/*',
+    douyin: 'https://creator.douyin.com/*',
+  };
+  var cookieDomains = {
+    xiaohongshu: '.xiaohongshu.com',
+    douyin: '.douyin.com',
+  };
+
+  try {
+    var cookies = await chrome.cookies.getAll({ domain: cookieDomains[platform] });
+    if (!cookies || cookies.length === 0) {
+      return { loggedIn: false, error: '请先在浏览器中登录' + (PLATFORM_ADAPTERS[platform] ? PLATFORM_ADAPTERS[platform].name : platform) };
+    }
+    return { loggedIn: true };
+  } catch (e) {
+    return { loggedIn: true };
+  }
+}
+
+// ===== 同步历史 =====
+
+async function saveSyncHistory(item, platform, success, message) {
+  try {
+    var stored = await chrome.storage.local.get(['syncHistory']);
+    var history = stored.syncHistory || [];
+    history.unshift({
+      title: item.title || '无标题',
+      folder: item.folder,
+      platform: platform,
+      success: success,
+      message: message || '',
+      time: new Date().toISOString(),
+    });
+    if (history.length > 100) history = history.slice(0, 100);
+    await chrome.storage.local.set({ syncHistory: history });
+  } catch (e) {}
+}
+
+async function getSyncHistory() {
+  var stored = await chrome.storage.local.get(['syncHistory']);
+  return stored.syncHistory || [];
+}
+
+function wasSynced(folder, platform) {
+  return getSyncHistory().then(function (history) {
+    return history.some(function (h) {
+      return h.folder === folder && h.platform === platform && h.success;
+    });
+  });
+}
 
 async function fetchRemoteSelectors(force) {
   try {
@@ -161,6 +256,20 @@ chrome.runtime.onMessage.addListener(function (request, _sender, sendResponse) {
     return true;
   }
 
+  if (request.type === 'cancel_sync') {
+    syncCancelled = true;
+    isSyncing = false;
+    stopKeepAlive();
+    addLog('info', '用户取消了同步');
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  if (request.type === 'get_sync_history') {
+    getSyncHistory().then(function (history) { sendResponse({ history: history }); });
+    return true;
+  }
+
   if (request.type === 'get_selectors') {
     sendResponse({ selectors: getSelectors(request.platform) });
     return true;
@@ -219,6 +328,7 @@ var PLATFORM_ADAPTERS = {
 };
 
 var syncStatuses = {};
+var syncCancelled = false;
 
 async function handleSync(payload) {
   var item = payload.item;
@@ -233,7 +343,9 @@ async function handleSync(payload) {
   addLog('info', '开始同步「' + (item.title || '无标题') + '」到 ' + adapter.name);
 
   try {
-    return await syncWithRetry(adapter.sync, item, adapter.name);
+    // 抖音和小红书的 DOM 自动化不重试（每次重试都会跳转页面）
+    var maxRetries = (platform === 'wechat_mp') ? 2 : 0;
+    return await syncWithRetry(adapter.sync, item, adapter.name, maxRetries);
   } catch (e) {
     addLog('error', '同步异常: ' + e.message);
     return { success: false, error: e.message };
@@ -244,18 +356,24 @@ async function handleBatchSync(payload) {
   var items = payload.items;
   var publishMode = payload.publishMode || 'draft';
   var results = [];
+  syncCancelled = false;
 
   for (var i = 0; i < items.length; i++) {
+    if (syncCancelled) {
+      addLog('info', '同步已取消');
+      break;
+    }
     var entry = items[i];
     var item = entry.item;
     item.publishMode = publishMode;
     var platforms = entry.platforms;
     var folder = item.folder;
 
-    syncStatuses[folder] = { status: 'syncing', text: '同步中…' };
+    syncStatuses[folder] = { status: 'syncing', text: publishMode === 'publish' ? '发布中…' : '同步中…' };
 
     var entryResults = [];
     for (var j = 0; j < platforms.length; j++) {
+      if (syncCancelled) break;
       var result = await handleSync({ item: item, platform: platforms[j] });
       entryResults.push({ platform: platforms[j], success: result.success, error: result.error, message: result.message });
     }
@@ -585,7 +703,7 @@ async function syncToXiaohongshu(item) {
 async function syncToDouyin(item) {
   var imagePaths = item.images || [];
   if (imagePaths.length === 0) {
-    return { success: false, error: '抖音图文需要至少一张图片' };
+    return { success: false, error: '抖音图文需要至少一张图片，请在 Skill 中生成文字卡片图' };
   }
 
   // 1. 读取本地图片
@@ -622,14 +740,13 @@ async function syncToDouyin(item) {
   await waitForTabLoad(targetTab.id, 15000);
   await new Promise(function (r) { setTimeout(r, 3000); });
 
-  // 3. 切换到图文模式并上传图片
+  // 3. 切换到图文模式
   addLog('info', '切换到图文模式...');
   try {
     await chrome.scripting.executeScript({
       target: { tabId: targetTab.id },
       world: 'MAIN',
       func: function () {
-        // 点击"图文"标签（抖音用 Semi UI 的 Tab 组件）
         var allTabs = document.querySelectorAll('[role="tab"], .semi-tabs-tab');
         for (var i = 0; i < allTabs.length; i++) {
           if (allTabs[i].textContent.indexOf('图文') >= 0) {
@@ -637,7 +754,6 @@ async function syncToDouyin(item) {
             return;
           }
         }
-        // 兜底：找任何包含"图文"文字的可点击元素
         var els = document.querySelectorAll('span, div, button');
         for (var j = 0; j < els.length; j++) {
           if (els[j].textContent.trim() === '图文' || els[j].textContent.trim() === '发布图文') {
@@ -663,7 +779,6 @@ async function syncToDouyin(item) {
         func: function (base64, mimeType, fileName) {
           return new Promise(function (resolve) {
             try {
-              // 找图片 file input
               var inputs = document.querySelectorAll('input[type="file"]');
               var imgInput = null;
               for (var i = 0; i < inputs.length; i++) {
@@ -706,7 +821,7 @@ async function syncToDouyin(item) {
         return { success: false, error: ur.error };
       }
 
-      addLog('info', '图片 ' + (j + 1) + ' 已上传');
+      addLog('info', '图片 ' + (j + 1) + '/' + imageDataList.length + ' 已上传');
       await new Promise(function (r) { setTimeout(r, 2000); });
     } catch (e) {
       addLog('error', '图片上传失败: ' + e.message);
@@ -714,11 +829,11 @@ async function syncToDouyin(item) {
     }
   }
 
-  // 5. 等待图片处理 + 填入标题和正文
+  // 5. 等待处理 + 填入标题和描述
   addLog('info', '等待图片处理...');
   await new Promise(function (r) { setTimeout(r, 5000); });
 
-  addLog('info', '填入标题和正文...');
+  addLog('info', '填入标题和描述...');
   try {
     var result = await withTimeout(
       chrome.tabs.sendMessage(targetTab.id, {

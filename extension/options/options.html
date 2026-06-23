@@ -127,7 +127,7 @@
 
   <div class="section">
     <h2>平台管理</h2>
-    <p class="field hint" style="margin-bottom:12px;">勾选你要使用的平台，未勾选的不会在同步面板中显示</p>
+    <p class="field hint" style="margin-bottom:12px;">添加你使用的平台，同步面板中只显示已添加的平台</p>
     <div class="platform-card">
       <div>
         <input type="checkbox" class="platform-toggle" data-platform="xiaohongshu" checked>
@@ -138,19 +138,19 @@
     </div>
     <div class="platform-card">
       <div>
-        <input type="checkbox" class="platform-toggle" data-platform="wechat_mp">
-        <span class="platform-name">微信公众号</span>
-        <span class="platform-auth">API 接口</span>
-      </div>
-      <span class="platform-status" id="wechatMpStatus">未配置</span>
-    </div>
-    <div class="platform-card">
-      <div>
         <input type="checkbox" class="platform-toggle" data-platform="douyin">
         <span class="platform-name">抖音</span>
         <span class="platform-auth">浏览器登录</span>
       </div>
       <span class="platform-status">免配置</span>
+    </div>
+    <div class="platform-card">
+      <div>
+        <input type="checkbox" class="platform-toggle" data-platform="wechat_mp">
+        <span class="platform-name">微信公众号</span>
+        <span class="platform-auth">需配置 API</span>
+      </div>
+      <span class="platform-status" id="wechatMpStatus">未配置</span>
     </div>
     <div style="margin-top: 12px; display: flex; align-items: center; gap: 12px;">
       <button class="btn btn-primary" id="syncRulesBtn">同步规则</button>

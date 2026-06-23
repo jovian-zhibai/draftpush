@@ -251,6 +251,20 @@ body {
   background: #e0e0e0;
 }
 
+.btn-danger {
+  padding: 8px 12px;
+  background: #ff3b30;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background: #e0342b;
+}
+
 .schedule-row {
   display: flex;
   gap: 6px;

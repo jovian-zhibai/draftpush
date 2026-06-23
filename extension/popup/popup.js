@@ -35,6 +35,16 @@ async function init() {
 
   document.getElementById('syncBtn').addEventListener('click', handleSync);
 
+  document.getElementById('cancelBtn').addEventListener('click', async function () {
+    try {
+      await chrome.runtime.sendMessage({ type: 'cancel_sync' });
+      showToast('已取消同步');
+      document.getElementById('cancelBtn').style.display = 'none';
+      document.getElementById('syncBtn').disabled = false;
+      document.getElementById('syncBtn').textContent = '同步选中内容';
+    } catch (e) {}
+  });
+
   document.getElementById('scheduleBtn').addEventListener('click', function () {
     var row = document.getElementById('scheduleRow');
     row.style.display = row.style.display === 'none' ? 'flex' : 'none';
@@ -132,6 +142,7 @@ function renderItems() {
 
       var platformTags = state.enabledPlatforms
         .map(function (pid) {
+          if (!PLATFORMS[pid]) return '';
           var selected = sel.platforms[pid] ? 'selected' : '';
           return '<span class="platform-tag ' + selected + '" data-index="' + index + '" data-platform="' + pid + '">' + PLATFORMS[pid] + '</span>';
         })
@@ -260,7 +271,6 @@ function syncTimeout(promise, ms) {
 async function handleSync() {
   var btn = document.getElementById('syncBtn');
   btn.disabled = true;
-  btn.textContent = '同步中…';
 
   document.getElementById('logPanel').style.display = 'flex';
 
@@ -290,6 +300,10 @@ async function handleSync() {
   renderItems();
 
   var publishMode = document.querySelector('input[name="publishMode"]:checked').value;
+  var isDirect = publishMode === 'publish';
+
+  btn.textContent = isDirect ? '发布中…' : '同步中…';
+  document.getElementById('cancelBtn').style.display = 'block';
 
   // 发送批量同步请求给 service worker（即使 popup 关了也会继续）
   try {
@@ -305,7 +319,9 @@ async function handleSync() {
     );
 
     // 同步完成，从 service worker 读取状态更新 UI
-    if (batchResult && batchResult.results) {
+    if (batchResult && batchResult.error) {
+      showToast(batchResult.error);
+    } else if (batchResult && batchResult.results) {
       for (var ri = 0; ri < batchResult.results.length; ri++) {
         var r = batchResult.results[ri];
         var matchEntry = batchItems.find(function (b) { return b.item.folder === r.folder; });
@@ -347,6 +363,7 @@ async function handleSync() {
   renderItems();
   btn.disabled = false;
   btn.textContent = '同步选中内容';
+  document.getElementById('cancelBtn').style.display = 'none';
   await refreshLogs();
 
   // 刷新内容列表（已归档的会消失）
