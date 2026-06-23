@@ -7,7 +7,7 @@ var PLATFORMS = {
 var state = {
   items: [],
   selections: {},
-  enabledPlatforms: ['xiaohongshu', 'wechat_mp', 'douyin'],
+  enabledPlatforms: ['xiaohongshu'],
 };
 
 document.addEventListener('DOMContentLoaded', init);
