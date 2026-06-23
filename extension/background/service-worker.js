@@ -486,7 +486,7 @@ async function syncToXiaohongshu(item) {
             }
           });
         },
-        args: [imageDataList[j].base64, imageDataList[j].mimeType, 'cover_' + j + '.png']
+        args: [imageDataList[j].base64, imageDataList[j].mimeType, imagePaths[j] || ('image_' + j + '.png')]
       }), 20000);
 
       var ur = uploadResult && uploadResult[0] && uploadResult[0].result;
@@ -654,7 +654,7 @@ async function syncToDouyin(item) {
             }
           });
         },
-        args: [imageDataList[j].base64, imageDataList[j].mimeType, 'img_' + j + '.png']
+        args: [imageDataList[j].base64, imageDataList[j].mimeType, imagePaths[j] || ('image_' + j + '.png')]
       }), 20000);
 
       var ur = uploadResult && uploadResult[0] && uploadResult[0].result;

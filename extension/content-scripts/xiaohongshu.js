@@ -22,13 +22,14 @@
         return { success: false, error: '未找到编辑器，请确认已上传图片且在图文编辑页面', logs: logs };
       }
 
-      // 2. 填入标题
+      // 2. 填入标题（小红书限制20字）
       log('填入标题...');
+      var title = (item.title || '').slice(0, 20);
       titleInput.focus();
-      titleInput.value = item.title || '';
+      titleInput.value = title;
       titleInput.dispatchEvent(new Event('input', { bubbles: true }));
       titleInput.dispatchEvent(new Event('change', { bubbles: true }));
-      log('标题已填入: ' + (item.title || '').substring(0, 20));
+      log('标题已填入: ' + title);
 
       // 3. 填入正文（不能用 selectAll，会覆盖图片）
       log('填入正文...');
