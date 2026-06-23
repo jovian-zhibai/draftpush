@@ -1,7 +1,7 @@
 {
   "name": "com.draftpush.host",
   "description": "草稿推送 DraftPush Native Messaging Host",
-  "path": "/usr/local/bin/draftpush-host",
+  "path": "/usr/local/lib/draftpush/launcher.sh",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://EXTENSION_ID_HERE/"

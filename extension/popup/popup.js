@@ -198,16 +198,15 @@ async function handleSync() {
   // 自动打开日志面板
   document.getElementById('logPanel').style.display = 'flex';
 
-  for (var indexStr in state.selections) {
+  var selKeys = Object.keys(state.selections);
+  for (var si = 0; si < selKeys.length; si++) {
+    var indexStr = selKeys[si];
     var sel = state.selections[indexStr];
     if (!sel.checked) continue;
 
     var index = parseInt(indexStr);
     var item = state.items[index];
-    var platforms = [];
-    for (var k in sel.platforms) {
-      if (sel.platforms[k]) platforms.push(k);
-    }
+    var platforms = Object.keys(sel.platforms).filter(function (k) { return sel.platforms[k]; });
 
     if (platforms.length === 0) continue;
 

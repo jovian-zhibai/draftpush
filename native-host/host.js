@@ -52,7 +52,7 @@ function readMessage(callback) {
       try {
         const msg = JSON.parse(msgStr);
         callback(msg);
-      } catch {}
+      } catch (e) { sendMessage({ type: 'error', payload: { error: 'JSON parse error: ' + e.message } }); }
     }
   });
 }
@@ -215,18 +215,18 @@ function main() {
     }
 
     if (msg.type === 'read_file') {
+      var filePath = msg.payload.path;
+      if (!path.isAbsolute(filePath) && msg.payload.folder_path) {
+        filePath = path.join(msg.payload.folder_path, filePath);
+      }
       try {
-        var filePath = msg.payload.path;
-        if (!path.isAbsolute(filePath) && msg.payload.folder_path) {
-          filePath = path.join(msg.payload.folder_path, filePath);
-        }
         var data = fs.readFileSync(filePath);
         var base64 = data.toString('base64');
         var ext = path.extname(filePath).toLowerCase();
-        var mimeType = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
+        var mimeType = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
         sendMessage({ type: 'file_data', payload: { path: filePath, base64: base64, mimeType: mimeType, size: data.length } });
       } catch (e) {
-        sendMessage({ type: 'file_error', payload: { path: msg.payload.path, error: e.message } });
+        sendMessage({ type: 'file_error', payload: { path: filePath, error: e.message } });
       }
     }
 
@@ -278,7 +278,7 @@ function multipartUpload(url, filePath, fieldName) {
     var fileData = fs.readFileSync(filePath);
     var fileName = path.basename(filePath);
     var ext = path.extname(filePath).toLowerCase();
-    var mimeType = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
+    var mimeType = ext === '.png' ? 'image/png' : ext === '.gif' ? 'image/gif' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
     var boundary = '----DraftPush' + Date.now();
 
     var header = '--' + boundary + '\r\n' +
@@ -313,17 +313,47 @@ function multipartUpload(url, filePath, fieldName) {
   });
 }
 
-function markdownToHtml(md) {
-  var html = md
-    .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gm, '<h1>$1</h1>')
+function inlineFormat(text) {
+  return text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/\n/g, '<br>');
-  return '<p>' + html + '</p>';
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+}
+
+function markdownToHtml(md) {
+  var lines = md.split('\n');
+  var html = [];
+  var inList = false;
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+
+    var h3 = line.match(/^### (.+)$/);
+    if (h3) { if (inList) { html.push('</ul>'); inList = false; } html.push('<h3>' + inlineFormat(h3[1]) + '</h3>'); continue; }
+    var h2 = line.match(/^## (.+)$/);
+    if (h2) { if (inList) { html.push('</ul>'); inList = false; } html.push('<h2>' + inlineFormat(h2[1]) + '</h2>'); continue; }
+    var h1 = line.match(/^# (.+)$/);
+    if (h1) { if (inList) { html.push('</ul>'); inList = false; } html.push('<h1>' + inlineFormat(h1[1]) + '</h1>'); continue; }
+
+    var ul = line.match(/^[-*+] (.+)$/);
+    if (ul) { if (!inList) { html.push('<ul>'); inList = true; } html.push('<li>' + inlineFormat(ul[1]) + '</li>'); continue; }
+
+    var ol = line.match(/^\d+\. (.+)$/);
+    if (ol) { if (!inList) { html.push('<ul>'); inList = true; } html.push('<li>' + inlineFormat(ol[1]) + '</li>'); continue; }
+
+    var bq = line.match(/^> (.+)$/);
+    if (bq) { if (inList) { html.push('</ul>'); inList = false; } html.push('<blockquote>' + inlineFormat(bq[1]) + '</blockquote>'); continue; }
+
+    if (line.trim() === '') { if (inList) { html.push('</ul>'); inList = false; } continue; }
+
+    if (inList) { html.push('</ul>'); inList = false; }
+    html.push('<p>' + inlineFormat(line) + '</p>');
+  }
+
+  if (inList) html.push('</ul>');
+  return html.join('');
 }
 
 async function wechatMpSync(payload) {

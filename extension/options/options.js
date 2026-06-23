@@ -33,7 +33,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     });
   });
 
-  // 保存
+  // 保存目录设置
   document.getElementById('saveBtn').addEventListener('click', async function () {
     var type = document.querySelector('input[name="dirType"]:checked').value;
     var obsidianDir = document.getElementById('obsidianDir').value.trim();
@@ -61,6 +61,30 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     showStatus('success', '设置已保存');
   });
+
+  // 加载公众号配置
+  loadWechatConfig();
+
+  // 保存公众号配置
+  document.getElementById('saveWechatBtn').addEventListener('click', async function () {
+    var appId = document.getElementById('wechatMpAppId').value.trim();
+    var appSecret = document.getElementById('wechatMpAppSecret').value.trim();
+
+    if (!appId) {
+      showWechatStatus('error', '请填写 AppID');
+      return;
+    }
+
+    var saveData = { wechatMpAppId: appId };
+    if (appSecret && appSecret !== '••••••••') {
+      saveData.wechatMpAppSecret = appSecret;
+    }
+
+    await chrome.storage.local.set(saveData);
+    document.getElementById('wechatMpStatus').textContent = '已配置';
+    document.getElementById('wechatMpStatus').style.color = '#34c759';
+    showWechatStatus('success', '公众号配置已保存');
+  });
 });
 
 function updatePathVisibility(type) {
@@ -77,8 +101,6 @@ function showStatus(type, msg) {
   }
 }
 
-// ===== 公众号配置 =====
-
 async function loadWechatConfig() {
   var saved = await chrome.storage.local.get(['wechatMpAppId', 'wechatMpAppSecret']);
   if (saved.wechatMpAppId) {
@@ -88,28 +110,6 @@ async function loadWechatConfig() {
     document.getElementById('wechatMpStatus').style.color = '#34c759';
   }
 }
-
-loadWechatConfig();
-
-document.getElementById('saveWechatBtn').addEventListener('click', async function () {
-  var appId = document.getElementById('wechatMpAppId').value.trim();
-  var appSecret = document.getElementById('wechatMpAppSecret').value.trim();
-
-  if (!appId) {
-    showWechatStatus('error', '请填写 AppID');
-    return;
-  }
-
-  var saveData = { wechatMpAppId: appId };
-  if (appSecret && appSecret !== '••••••••') {
-    saveData.wechatMpAppSecret = appSecret;
-  }
-
-  await chrome.storage.local.set(saveData);
-  document.getElementById('wechatMpStatus').textContent = '已配置';
-  document.getElementById('wechatMpStatus').style.color = '#34c759';
-  showWechatStatus('success', '公众号配置已保存');
-});
 
 function showWechatStatus(type, msg) {
   var el = document.getElementById('wechatSaveStatus');
